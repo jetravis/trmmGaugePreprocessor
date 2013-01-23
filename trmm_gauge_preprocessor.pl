@@ -115,34 +115,45 @@ sub checkGaugeMonth{
 }
 
 sub processMonth{
-	# 
-	my ($file,$month) = @_; #extract the file and month from the comments
-	my @output=();
+	# Takes two arguments the 1st is the gauge file that needs to be processed.
+	# The 2nd argument is the month. 
+	
+	my ($file,$month) = @_; # extract the file and month from the comments
+	my @output=(); # initialize the output array
 	my $currentTime=0; # indicates initial time of zero
 	my $firstObs=1; # flag to indicate the whether the first observation has been
 					# processed
-	if (!(-e $file)){
-		print LOG "$file does not exist";
-		return 0;
+	if (!(-e $file)){ # check that the given file exists. 
+		print LOG "$file does not exist"; # Output to the log if the file doesn't exist
+		return 0; 
 	}
-	open(GAUGEFILE,"<",$file);
-	my $head =<GAUGEFILE>;
+	open(GAUGEFILE,"<",$file); # open the specified function
+	my $head =<GAUGEFILE>; # get the header from the file. Not currently used for anything.
 	while (<GAUGEFILE>){
+		# iterate over the remaining lines in the file
 		my $line=$_;
 #		print $line;
-		$line=~m/(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*\d*\s*(-*\d*\.\d*)/; # 
-		my $gaugeYear=$1;
-		my $gaugeMonth=$2;
+		if !($line=~m/(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*\d*\s*(-*\d*\.\d*)/){
+			next # skip to the next line in the file if current line doesn't match
+				 # the specified pattern.
+		}; # 
+		# the next lines get the
+		my $gaugeYear=$1; # get the gauge year from the regular expression
+		my $gaugeMonth=$2; # 
 		my $gaugeDay=$3;
-		my $julianDay=$4;
+		my $daysFromYearStart=$4; # not currently used
 		my $gaugeHour=$5;
 		my $gaugeMinute=$6;
 		my $rainRate=$7;
+		# calculate the number of minutes from the start of the month. 
+		# minute 0= 00:00 on the 1st of the month, minute 1=00:01 on the 1st etc
 		my $minutesFromStart=($gaugeDay-1)*1440+$gaugeHour*60+$gaugeMinute;
-		print $minutesFromStart,"\n";
+		# if the month on the specified line is not equal to the month specified
+		# in the file then skip to the next line
 		next if ($gaugeMonth!=$month);
+		# pads the output with either the value specified in $naValue if the current
+		# observation is the first in the month or 0 otherwise.
 		while ($currentTime<$minutesFromStart){
-			print $currentTime,"\n";
 			if ($firstObs==1){
 				push(@output,$naValue);
 			} else {
@@ -150,18 +161,25 @@ sub processMonth{
 			}
 			$currentTime++;
 		}
-		push(@output,$rainRate);
-		print "observation added\n";
-		$firstObs=0;
+		push(@output,$rainRate); # adds the value of rain rate to the output
+		$firstObs=0; # sets the flag to say that the first observation has
+					 # been processed. All subsequent gaps will take a value
+					 # of zero.
 	}
+	# if no observations from the month passed to the function are found then
+	# the length of output will be zero. If a value of zero is found a 
 	if (scalar(@output)==0){
 		print LOG "No data from month $month in $file";
 		return 0;
 	}
+	# checks to see if the total length is less than the length of the month.
+	# If it is then pads the end of the output with $naValue.
 	while (scalar(@output)<1440*$monthlength{$month}){
 		push(@output,$naValue);
 	}
+	# close the gauge file.
 	close(GAUGEFILE);
+	# return the output
 	return @output;
 }
 

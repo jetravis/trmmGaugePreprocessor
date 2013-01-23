@@ -26,14 +26,11 @@ my @years=qw/2002/;
 
 my @seasons=qw/DJF MAM JJA SON/;
 
-# If $assumeCompleteData=0 all times before the first and after the last
-# observation in a particular month will be replaced by the value given in
-# $naValue. Otherwise the values will be zero.
-my $assumeCompleteData=0; 
+# The program will insert a value of NA for any times before the first 
+# observation and after the last. 
 my $naValue="NA";
 # Specify the extension name of the gauge files. 
 my $gaugeFileExtentsion="asc";
-
 
 
 #### End of user configurable values ####
@@ -120,18 +117,19 @@ sub checkGaugeMonth{
 sub processMonth{
 	# 
 	my ($file,$month) = @_; #extract the file and month from the comments
+	my @output=();
+	my $currentTime=0; # indicates initial time of zero
+	my $firstObs=1; # flag to indicate the whether the first observation has been
+					# processed
 	if (!(-e $file)){
-		print "File doesn't exist\n";
 		print LOG "$file does not exist";
 		return 0;
 	}
-	
 	open(GAUGEFILE,"<",$file);
 	my $head =<GAUGEFILE>;
-	print "Header is $head\n";
 	while (<GAUGEFILE>){
 		my $line=$_;
-		print $line;
+#		print $line;
 		$line=~m/(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*(\d*)\s*\d*\s*(-*\d*\.\d*)/; # 
 		my $gaugeYear=$1;
 		my $gaugeMonth=$2;
@@ -140,9 +138,31 @@ sub processMonth{
 		my $gaugeHour=$5;
 		my $gaugeMinute=$6;
 		my $rainRate=$7;
-		print "Year is $gaugeYear, month is $gaugeMonth, day is $gaugeDay, hour is $gaugeHour, minute is $gaugeMinute, rain rate is $rainRate\n";
+		my $minutesFromStart=($gaugeDay-1)*1440+$gaugeHour*60+$gaugeMinute;
+		print $minutesFromStart,"\n";
+		next if ($gaugeMonth!=$month);
+		while ($currentTime<$minutesFromStart){
+			print $currentTime,"\n";
+			if ($firstObs==1){
+				push(@output,$naValue);
+			} else {
+				push(@output,0);
+			}
+			$currentTime++;
+		}
+		push(@output,$rainRate);
+		print "observation added\n";
+		$firstObs=0;
+	}
+	if (scalar(@output)==0){
+		print LOG "No data from month $month in $file";
+		return 0;
+	}
+	while (scalar(@output)<1440*$monthlength{$month}){
+		push(@output,$naValue);
 	}
 	close(GAUGEFILE);
+	return @output;
 }
 
 
@@ -150,4 +170,5 @@ sub processMonth{
 my @gaugeList=&getGaugeList("D:\\KWAJ data\\KWAJ Gauge Data\\kwaj_gauge_data_2001");
 print join("\n",@gaugeList),"\n";
 
-&processMonth("D:\\KWAJ data\\KWAJ Gauge Data\\kwaj_gauge_data_2001\\2A56_KWAJ_KWA_0201_200101_3.asc","01");
+my @janData=&processMonth("D:\\KWAJ data\\KWAJ Gauge Data\\kwaj_gauge_data_2001\\2A56_KWAJ_KWA_0201_200101_3.asc",1);
+

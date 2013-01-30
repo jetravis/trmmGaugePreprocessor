@@ -14,17 +14,17 @@ open(LOG,">","trmm_preprocess.log");
 
 # Input directory is the location where the raw asc files should be stored.
 # 
-my $inputDirectory="E:/KWAJ data/test/kwaj_gauge_data_2001";
-my $outputDirectory="E:/KWAJ data/test/kwaj_gauge_stats";
+my $inputDirectory="D:\\KWAJ data\\KWAJ Gauge Data";
+my $outputDirectory="D:\\kwajtest";
 
 # Provide a list of years to be processed to time series
-my @years=qw/2001/;
+my @years=qw/2001 2002/;
 # Provide a list of seasons within each year to be processed
 # to time series.
 # Note that DJF uses December from the previous year ie DJF 2001
 # uses December 2000 and January, February 2001.
 
-my @seasons=qw/MAM JJA SON/;
+my @seasons=qw/DJF MAM JJA SON/;
 
 # The program will insert a value of NA for any times before the first 
 # observation and after the last. 
@@ -125,10 +125,13 @@ sub checkGaugeMonth{
 }
 
 sub processMonth{
-	# Takes two arguments the 1st is the gauge file that needs to be processed.
-	# The 2nd argument is the month. 
+	# Takes three arguments the 1st is the gauge file that needs to be processed.
+	# The 2nd argument is the month and the third is the year. If the file exists
+	# and contains data from the specified month and year then the function will
+	# output a time series for the specified month. Otherwise it will return a
+	# scalar with value 0.
 	
-	my ($file,$month) = @_; # extract the file and month from the comments
+	my ($file,$month,$year) = @_; # extract the file and month from the comments
 	my @output=(); # initialize the output array
 	my $currentTime=0; # indicates initial time of zero
 	my $firstObs=1; # flag to indicate the whether the first observation has been
@@ -164,9 +167,9 @@ sub processMonth{
 		# minute 0= 00:00 on the 1st of the month, minute 1=00:01 on the 1st etc
 		my $minutesFromStart=($gaugeDay-1)*1440+$gaugeHour*60+$gaugeMinute;
 		
-		# if the month on the specified line is not equal to the month specified
-		# in the file then skip to the next line
-		next if ($gaugeMonth!=$month);
+		# if the month and the year on the specified line are not equal to those specified
+		# in the function arguments then skip to the next line.
+		next if ($gaugeMonth!=$month || $gaugeYear!=$year);
 		
 		# pads the output with either the value specified in $naValue if the current
 		# observation is the first in the month or 0 otherwise.
@@ -187,7 +190,7 @@ sub processMonth{
 	# if no observations from the month passed to the function are found then
 	# the length of output will be zero. If a value of zero is found a 
 	if (scalar(@output)==0){
-		print LOG "No data from month $month in $file";
+		print LOG "No data from month $month in $file\n";
 		return 0;
 	}
 	# checks to see if the total length is less than the length of the month.
@@ -203,46 +206,115 @@ sub processMonth{
 }
 
 ################## MAIN CODE HERE ########################
-&checkConfigValid();
-my @gaugeList=&getGaugeList("D:\\KWAJ data\\KWAJ Gauge Data\\2001");
-print join("\n",@gaugeList),"\n";
 
-# my @janData=&processMonth("D:\\KWAJ data\\KWAJ Gauge Data\\kwaj_gauge_data_2001\\2A56_KWAJ_KWA_0201_200101_3.asc",1);
-print join("\n",@gaugeList),"\n";
+# Call a function to check that the configuration is valid.
+&checkConfigValid();
+
+# first iterate over each of the specified years.
 foreach my $year (@years){
+	# First get a list of the gauges contained in the directory. If the variable 
+	# $gaugeDirectoryPerYear is equal to 1 then the program assumes that each year
+	# is contained in a directory named after the year under the directory 
+	# specified in the variable $inputDirectory. Otherwise it assumes all gauge
+	# files are contained with $inputDirectory.
+	my @gaugeList=qw//;
+	if ($gaugeDirectoryPerYear==1){
+		@gaugeList=&getGaugeList("$inputDirectory\\$year");
+	} else {
+		@gaugeList=&getGaugeList("$inputDirectory");
+	}
+	# skip to next year and prints to the log if no valid files are found.
+	if (scalar(@gaugeList)==0){ # checks to see if any 
+		print LOG "No gauges files found for year $year.\n";
+		next;
+	}
+	if (!(-d "$outputDirectory\\$year")){
+		mkdir "$outputDirectory\\$year"
+	}
 	foreach my $season (@seasons){
-		print $season,"\n";
+		# iterates over each of the specified seasons.
 		my @seasonMonths=@{$seasons{$season}};
+		# gets a list of the months in each season from the hash %seasons.
 		foreach my $gauge (@gaugeList){
+			# iterate over a list of all the gauges found in a particular year.
+			# First seperate the gauge code into the 3 letter code and 4 digit id.
 			$gauge=~/(\w{3})(\d{4})/;
-			print "$gauge\n";
 			my $gaugeCode=$1;
 			my $gaugeId=$2;
-			my @fileList=&getGaugeFileList("D:\\KWAJ data\\KWAJ Gauge Data\\2001\\",$gaugeCode,$gaugeId);
+			# Initialize the output to be an empty list
 			my @output=qw//;
+			# Set the flag $missingMonth=0. If $missingMonth=1 it means that one
+			# of the months in the season does not have a file in the directory.
 			my $missingMonth=0;
 			foreach my $month (@seasonMonths){
-				my $monthfile="";
-				if ($month=~/\d{2}/){
-					$monthfile=(grep(/$year$month/,@fileList))[0];
+				# Iterates over each month in the current season. 
+				
+				# Initialize variables to hold the year that is being worked on
+				# and the current directory. 
+				my $currentYear;
+				my $currentDirectory;
+				# By convention the season DJF2001 would contain Dec 2000, Jan
+				# 2001 and Feb 2001.
+				if ($month==12){
+					$currentYear=$year-1;
 				} else {
-					$monthfile=(grep(/$year(0)$month/,@fileList))[0];
+					$currentYear=$year;
 				}
+				# checks to see if the files are stored in a directory for each
+				# year.
+				if ($gaugeDirectoryPerYear==1){
+					$currentDirectory="$inputDirectory\\$currentYear";
+				} else {
+					$currentDirectory="$inputDirectory";
+				}
+				# get a list of the files for the specified year.
+				my @fileList=&getGaugeFileList($currentDirectory,$gaugeCode,$gaugeId);
+				# initialize a variable to hold the name of the file that contains
+				# the data for the specified gauge and month.
+				my $monthfile="";
+				# First checks to see if there is one file per year or one per month.
+				# In the first case it will search for files containing the name
+				# just the year in the file name. Otherwise it searchs for the year
+				# and the month separated by an underscore.
+				if ($gaugeFilePerMonth==0){
+					$monthfile=(grep(/$currentYear/,@fileList))[0];
+				} elsif ($month=~/\d{2}/){
+					$monthfile=(grep(/$currentYear$month/,@fileList))[0];
+				} else {
+					$monthfile=(grep(/$currentYear(0)$month/,@fileList))[0];
+				}
+				# Check to see if a file was found. If a file was found process the
+				# file and append the resulting time series to the other time series
+				# for that season. If no file was found set the $missingMonth flag to 1.
 				if (!($monthfile =~/^$/)){
-					my @monthData=&processMonth("D:\\KWAJ data\\KWAJ Gauge Data\\2001\\$monthfile",$month);
-					print "Num of obs in $month is:- ",scalar(@monthData),"\n";
+					my @monthData=&processMonth("$currentDirectory\\$monthfile",$month,$currentYear);
+					# @monthData will return a scalar with a value of zero if there are any
+					# issues with the file. To check for this we check to see if the list
+					# @monthData contains a single element. 
+					if (scalar(@monthData)==1){
+						$missingMonth=1;
+					}
+					# Append the process time series for the particular month to the output.
 					push(@output,@monthData);
 				} else {
-					print "$gauge is missing $month.\n";
+					# print a message to the log if a no file exists for a particular
+					# gauge and month. 
+					print LOG "$gauge is missing $month.\n";
 					$missingMonth=1;
 				}
 			}
+			# checks to see if there are no months missing for a particular
+			# gauge and season. 
 			if ($missingMonth==0){
-				print scalar(@output),"\n";
-				open(GAUGEOUT,">","D:\\kwajtest\\${gauge}_${year}_${season}.dat");
+				# If there aren't it writes the time series for a particular season to
+				# the file specified in the $year directory under the directory 
+				# specified in $outputDirectory. 
+				open(GAUGEOUT,">","$outputDirectory\\$year\\${gauge}_${year}_${season}.dat");
 				print GAUGEOUT join("\n",@output);
 				close(GAUGEOUT);
 			} else {
+				# If there are any months missing print a message to the log
+				# starting which gauge and season is missing a month.
 				print LOG "$gauge is missing a month in $season.\n";
 			}
 		}

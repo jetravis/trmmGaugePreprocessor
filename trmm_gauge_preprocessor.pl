@@ -1,6 +1,6 @@
 #################################################################################
 #                                                                               #
-# TRMM radar preprocessor                                                       #
+# TRMM gauge preprocessor                                                       #
 #                                                                               #
 #                                                                               #
 #                                                                               #
@@ -67,20 +67,20 @@ my %seasons= ( "DJF"=>[12,1,2],"MAM"=>[3,4,5]
 sub checkConfigValid{
 	# Checks the config options to make sure valid
 	if (-d $inputDirectory){
-		print "$inputDirectory Exists.\n";
+		print LOG "$inputDirectory Exists.\n";
 	} else {
-		print "$inputDirectory doesn't exist.\n";
+		print LOG "$inputDirectory doesn't exist.\n";
 	}
 	if (-d $outputDirectory){
-		print "$outputDirectory Exists.\n";
+		print LOG "$outputDirectory Exists.\n";
 	} else {
-		print "$outputDirectory doesn't exist.\n";
+		print LOG "$outputDirectory doesn't exist.\n";
 	}
 	foreach my $season (@seasons){
 		if ( grep( /^$season$/, keys %seasons ) ) {
-			print "$season found\n";
+			print LOG "$season valid\n";
 		} else {
-			print "$season not found\n";
+			print LOG "$season not valid\n";
 		}
 	}
 }
